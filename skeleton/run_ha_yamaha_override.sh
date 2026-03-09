@@ -7,8 +7,9 @@ HOST_PORT="${HOST_PORT:-8500}"
 CONTAINER_PORT="${CONTAINER_PORT:-8123}"
 CONTAINER_NAME="homeassistant-yamaha-test"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MEDIA_PLAYER_PATH="$SCRIPT_DIR/media_player.py"
-RXV_DIR="$SCRIPT_DIR/rxv"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+YAMAHA_COMPONENT_DIR="$REPO_ROOT/homeassistant/components/yamaha"
+RXV_DIR="$REPO_ROOT/python/rxv"
 OVERRIDE_CONFIG_PATH="$SCRIPT_DIR/configuration.yaml"
 TMP_CONFIG_DIR="/tmp/ha"
 TARGET_CONFIG_FILE="$TMP_CONFIG_DIR/configuration.yaml"
@@ -40,8 +41,8 @@ if [[ ! -d "$CONFIG_DIR" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$MEDIA_PLAYER_PATH" ]]; then
-  echo "Patched media_player.py not found: $MEDIA_PLAYER_PATH"
+if [[ ! -d "$YAMAHA_COMPONENT_DIR" ]]; then
+  echo "Patched yamaha component directory not found: $YAMAHA_COMPONENT_DIR"
   exit 1
 fi
 
@@ -60,10 +61,10 @@ mkdir -p "$TMP_CONFIG_DIR"
 cp -a "$CONFIG_DIR"/. "$TMP_CONFIG_DIR"/
 cp "$OVERRIDE_CONFIG_PATH" "$TARGET_CONFIG_FILE"
 
-existing_8500_containers="$(docker ps --filter publish=8500 --format '{{.ID}}')"
-if [[ -n "$existing_8500_containers" ]]; then
-  echo "Stopping containers publishing host port 8500: $existing_8500_containers"
-  docker rm -f $existing_8500_containers >/dev/null
+existing_host_port_containers="$(docker ps --filter "publish=$HOST_PORT" --format '{{.ID}}')"
+if [[ -n "$existing_host_port_containers" ]]; then
+  echo "Stopping containers publishing host port $HOST_PORT: $existing_host_port_containers"
+  docker rm -f $existing_host_port_containers >/dev/null
 fi
 
 if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
@@ -72,6 +73,7 @@ fi
 
 echo "Using Home Assistant config directory: $TMP_CONFIG_DIR"
 echo "Using override config from: $OVERRIDE_CONFIG_PATH"
+echo "Mounting yamaha component from: $YAMAHA_COMPONENT_DIR"
 echo "Mounting rxv package from: $RXV_DIR"
 echo "Listening on host port $HOST_PORT and container port $CONTAINER_PORT"
 
@@ -80,7 +82,7 @@ docker run --rm -d \
   -e PYTHONPATH="/opt/yamaha_override/rxv${PYTHONPATH:+:$PYTHONPATH}" \
   -p "$HOST_PORT:$CONTAINER_PORT" \
   -v "$TMP_CONFIG_DIR:/config" \
-  -v "$MEDIA_PLAYER_PATH:/usr/src/homeassistant/homeassistant/components/yamaha/media_player.py:ro" \
+  -v "$YAMAHA_COMPONENT_DIR:/usr/src/homeassistant/homeassistant/components/yamaha:ro" \
   -v "$RXV_DIR:/opt/yamaha_override/rxv:ro" \
   "$IMAGE" >/dev/null
 
