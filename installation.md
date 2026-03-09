@@ -1,28 +1,29 @@
 # Installation
 
-This repository contains two override trees for Home Assistant container users:
+This repository contains a patched Home Assistant Yamaha integration tree:
 
 - `homeassistant/components/yamaha`
-- `python/rxv`
 
-The `yamaha` integration code belongs inside the Home Assistant source tree in the container:
+It is intended to replace the global Yamaha integration inside the Home Assistant container:
 
 - `/usr/src/homeassistant/homeassistant/components/yamaha`
 
-The `rxv` package is a separate Python package and must also be made available on `PYTHONPATH`.
+The patched `rxv` library and its supporting repo files are bundled inside that integration directory as:
 
-## Option 1: Bind mount overrides into a test container
+- `homeassistant/components/yamaha/rxv`
 
-If you launch Home Assistant yourself with `docker run`, mount both override paths:
+No extra `PYTHONPATH` override is needed.
+
+## Bind mount into a container
+
+If you launch Home Assistant yourself with `docker run`, mount the Yamaha integration directory over the global Yamaha integration in the container:
 
 ```sh
 docker run --rm -d \
   --name homeassistant-yamaha-test \
   -p 8123:8123 \
-  -e PYTHONPATH="/opt/yamaha_override/rxv" \
   -v /path/to/ha-config:/config \
   -v /path/to/ha-yamaha/homeassistant/components/yamaha:/usr/src/homeassistant/homeassistant/components/yamaha:ro \
-  -v /path/to/ha-yamaha/python/rxv:/opt/yamaha_override/rxv:ro \
   ghcr.io/home-assistant/home-assistant:stable
 ```
 
@@ -32,45 +33,7 @@ In this repository, you can use:
 ./skeleton/run_ha_yamaha_override.sh /path/to/ha-config
 ```
 
-That script mounts the same two override paths automatically and replaces the config with `skeleton/configuration.yaml`.
-
-## Option 2: Patch an existing Home Assistant container
-
-If Home Assistant is already running in a container, copy the files into the container and restart it.
-
-Example container name:
-
-```sh
-HA_CONTAINER=homeassistant
-```
-
-Copy the yamaha component tree:
-
-```sh
-docker cp ./homeassistant/components/yamaha/. \
-  "$HA_CONTAINER:/usr/src/homeassistant/homeassistant/components/yamaha/"
-```
-
-Copy the `rxv` package payload:
-
-```sh
-docker exec "$HA_CONTAINER" mkdir -p /opt/yamaha_override/rxv
-docker cp ./python/rxv/. "$HA_CONTAINER:/opt/yamaha_override/rxv/"
-```
-
-Then ensure the container starts with:
-
-```sh
-PYTHONPATH=/opt/yamaha_override/rxv
-```
-
-How you set that depends on how the container is managed:
-
-- `docker run`: add `-e PYTHONPATH=/opt/yamaha_override/rxv`
-- `docker compose`: add `environment:`
-- Kubernetes: add an env var to the pod spec
-
-Restart the container after copying the files.
+That script mounts the patched Yamaha integration automatically and replaces the config with `skeleton/configuration.yaml`.
 
 ## Docker Compose example
 
@@ -80,12 +43,9 @@ services:
     image: ghcr.io/home-assistant/home-assistant:stable
     ports:
       - "8123:8123"
-    environment:
-      PYTHONPATH: /opt/yamaha_override/rxv
     volumes:
       - ./config:/config
       - ./ha-yamaha/homeassistant/components/yamaha:/usr/src/homeassistant/homeassistant/components/yamaha:ro
-      - ./ha-yamaha/python/rxv:/opt/yamaha_override/rxv:ro
 ```
 
 ## Verify
@@ -99,10 +59,4 @@ You can check with:
 
 ```sh
 docker logs -f homeassistant
-```
-
-If you are using the test launcher from this repo:
-
-```sh
-docker logs -f homeassistant-yamaha-test
 ```

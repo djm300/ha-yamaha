@@ -6,8 +6,6 @@ import logging
 from typing import Any
 
 import requests
-import rxv
-from rxv import RXV
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
@@ -38,6 +36,8 @@ from .const import (
     SERVICE_MENU_CURSOR,
     SERVICE_SELECT_SCENE,
 )
+from . import rxv
+from .rxv import RXV
 
 _LOGGER = logging.getLogger(__name__)
 

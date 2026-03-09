@@ -9,7 +9,6 @@ CONTAINER_NAME="homeassistant-yamaha-test"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 YAMAHA_COMPONENT_DIR="$REPO_ROOT/homeassistant/components/yamaha"
-RXV_DIR="$REPO_ROOT/python/rxv"
 OVERRIDE_CONFIG_PATH="$SCRIPT_DIR/configuration.yaml"
 TMP_CONFIG_DIR="/tmp/ha"
 TARGET_CONFIG_FILE="$TMP_CONFIG_DIR/configuration.yaml"
@@ -46,11 +45,6 @@ if [[ ! -d "$YAMAHA_COMPONENT_DIR" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$RXV_DIR" ]]; then
-  echo "Patched rxv directory not found: $RXV_DIR"
-  exit 1
-fi
-
 if [[ ! -f "$OVERRIDE_CONFIG_PATH" ]]; then
   echo "Override configuration.yaml not found: $OVERRIDE_CONFIG_PATH"
   exit 1
@@ -74,16 +68,13 @@ fi
 echo "Using Home Assistant config directory: $TMP_CONFIG_DIR"
 echo "Using override config from: $OVERRIDE_CONFIG_PATH"
 echo "Mounting yamaha component from: $YAMAHA_COMPONENT_DIR"
-echo "Mounting rxv package from: $RXV_DIR"
 echo "Listening on host port $HOST_PORT and container port $CONTAINER_PORT"
 
 docker run --rm -d \
   --name "$CONTAINER_NAME" \
-  -e PYTHONPATH="/opt/yamaha_override/rxv${PYTHONPATH:+:$PYTHONPATH}" \
   -p "$HOST_PORT:$CONTAINER_PORT" \
   -v "$TMP_CONFIG_DIR:/config" \
   -v "$YAMAHA_COMPONENT_DIR:/usr/src/homeassistant/homeassistant/components/yamaha:ro" \
-  -v "$RXV_DIR:/opt/yamaha_override/rxv:ro" \
   "$IMAGE" >/dev/null
 
 docker logs -f "$CONTAINER_NAME" &
