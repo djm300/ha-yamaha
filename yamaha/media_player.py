@@ -115,6 +115,18 @@ class YamahaConfigInfo:
 
 def _discovery(config_info: YamahaConfigInfo) -> list[RXV]:
     """Discover list of zone controllers from configuration in the network."""
+    # Local override vs upstream Yamaha media_player: add startup diagnostics
+    # around discovery so we can verify zone loading in Home Assistant.
+    _LOGGER.debug(
+        "Starting Yamaha zone discovery: from_discovery=%s host=%s ctrl_url=%s name=%s",
+        config_info.from_discovery,
+        config_info.host,
+        config_info.ctrl_url,
+        config_info.name,
+    )
+    # This confirms Home Assistant is importing the mounted local rxv package
+    # instead of the copy bundled in the container image.
+    _LOGGER.debug("Loaded rxv module from %s", getattr(rxv, "__file__", "<unknown>"))
     if config_info.from_discovery:
         _LOGGER.debug("Discovery Zones")
         zones = rxv.RXV(
@@ -133,6 +145,13 @@ def _discovery(config_info: YamahaConfigInfo) -> list[RXV]:
         zones = rxv.RXV(config_info.ctrl_url, config_info.name).zone_controllers()
 
     _LOGGER.debug("Returned _discover zones: %s", zones)
+    # Keep this compact zone summary close to discovery so zone-loading issues
+    # are visible without needing to inspect each RXV object repr.
+    _LOGGER.debug(
+        "Zone discovery returned %d controllers: %s",
+        len(zones),
+        [zone.zone for zone in zones],
+    )
     return zones
 
 
@@ -177,6 +196,14 @@ async def async_setup_platform(
         if entity.zone_id not in known_zones:
             known_zones.add(entity.zone_id)
             entities.append(entity)
+            # Local override vs upstream Yamaha media_player: log each accepted
+            # zone entity so duplicate/missing zone registration is explicit.
+            _LOGGER.debug(
+                "Added Yamaha entity for zone_id=%s zone=%s name=%s",
+                entity.zone_id,
+                zctrl.zone,
+                entity.name,
+            )
         else:
             _LOGGER.debug(
                 "Ignoring duplicate zone: %s %s", config_info.name, zctrl.zone
@@ -236,9 +263,32 @@ class YamahaDeviceZone(MediaPlayerEntity):
             # the default name of the integration may not be changed
             # to avoid a breaking change.
             self._attr_unique_id = f"{self.zctrl.serial_number}_{self._zone}"
+        # Local override vs upstream Yamaha media_player: identify every
+        # constructed zone entity with its control URL and stable zone_id.
+        # Emit a one-line identity record when Home Assistant creates a zone
+        # entity so duplicate/missing zone registration is easy to spot.
+        _LOGGER.debug(
+            "Initialized YamahaDeviceZone: base_name=%s zone=%s zone_id=%s serial=%s ctrl_url=%s",
+            self._name,
+            self._zone,
+            self.zone_id,
+            self.zctrl.serial_number,
+            self.zctrl.ctrl_url,
+        )
+
+    def _zone_is_on(self) -> bool:
+        """Return entity on/off state for this zone."""
+        if self._zone == "Main_Zone":
+            return self.zctrl.on
+        return self.zctrl.enabled
 
     def update(self) -> None:
         """Get the latest details from the device."""
+        # Local override vs upstream Yamaha media_player: trace each update
+        # cycle at zone granularity to debug zone-specific state loading.
+        # Keep per-update logging at the zone level so we can correlate zone
+        # loading, current source, and feature support with receiver responses.
+        _LOGGER.debug("Updating Yamaha zone state for %s (%s)", self._name, self._zone)
         try:
             self._play_status = self.zctrl.play_status()
         except requests.exceptions.ConnectionError:
@@ -247,7 +297,7 @@ class YamahaDeviceZone(MediaPlayerEntity):
             return
 
         self._attr_available = True
-        if self.zctrl.on:
+        if self._zone_is_on():
             if self._play_status is None:
                 self._attr_state = MediaPlayerState.ON
             elif self._play_status.playing:
@@ -277,6 +327,23 @@ class YamahaDeviceZone(MediaPlayerEntity):
             self._attr_sound_mode = None
             self._attr_sound_mode_list = None
 
+        # Local override vs upstream Yamaha media_player: summarize the loaded
+        # state after each refresh so zone loading can be inspected from logs.
+        _LOGGER.debug(
+            "Updated Yamaha zone %s: available=%s state=%s on=%s source=%s raw_source=%s volume=%s muted=%s playback_status=%s playback_supported=%s surround_modes=%s",
+            self._zone,
+            self._attr_available,
+            self._attr_state,
+            self._zone_is_on(),
+            self._attr_source,
+            current_source,
+            self._attr_volume_level,
+            self._attr_is_volume_muted,
+            self._play_status,
+            self._is_playback_supported,
+            self._attr_sound_mode_list,
+        )
+
     def build_source_list(self) -> None:
         """Build the source list."""
         self._reverse_mapping = {
@@ -287,6 +354,17 @@ class YamahaDeviceZone(MediaPlayerEntity):
             self._source_names.get(source, source)
             for source in self.zctrl.inputs()
             if source not in self._source_ignore
+        )
+        # Local override vs upstream Yamaha media_player: include the reverse
+        # alias map in logs because source-name rewrites affect zone behavior.
+        # Source mapping bugs are easy to misread from entity state alone, so
+        # log both the alias reverse map and the final exposed source list.
+        _LOGGER.debug(
+            "Built source list for zone %s: raw_reverse_mapping=%s source_list=%s ignored=%s",
+            self._zone,
+            self._reverse_mapping,
+            self._attr_source_list,
+            self._source_ignore,
         )
 
     @property
@@ -326,7 +404,10 @@ class YamahaDeviceZone(MediaPlayerEntity):
 
     def turn_off(self) -> None:
         """Turn off media player."""
-        self.zctrl.on = False
+        if self._zone == "Main_Zone":
+            self.zctrl.on = False
+            return
+        self.zctrl.enabled = False
 
     def set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
@@ -340,7 +421,10 @@ class YamahaDeviceZone(MediaPlayerEntity):
 
     def turn_on(self) -> None:
         """Turn the media player on."""
-        self.zctrl.on = True
+        if self._zone == "Main_Zone":
+            self.zctrl.on = True
+        else:
+            self.zctrl.enabled = True
         self._attr_volume_level = (self.zctrl.volume / 100) + 1
 
     def media_play(self) -> None:

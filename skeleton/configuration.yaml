@@ -1,0 +1,39 @@
+logger:
+  default: debug
+  logs:
+    homeassistant.components.yamaha: debug
+    homeassistant.components.yamaha.media_player: debug
+    homeassistant.components.media_player: debug
+    homeassistant.core: debug
+    homeassistant.helpers.entity: debug
+    homeassistant.helpers.script: debug
+    rxv: debug
+    aiohttp: debug
+    async_upnp_client: debug
+    urllib3: debug
+
+media_player:
+- platform: yamaha
+  host: 192.168.50.92
+  source_ignore:
+  - AUDIO
+  - AV1
+  - AV2
+  - AV3
+  - AV6
+  - HDMI3
+  - HDMI4
+  - HDMI5
+  - HDMI6
+  - NET RADIO
+  - SERVER
+  - TUNER
+  - USB
+  - V-AUX
+  - iPod (USB)
+  - AUX
+  source_names:
+    HDMI1: Proximus
+    HDMI2: AppleTV
+    AV4: Airplay2
+    AV5: Sonos
