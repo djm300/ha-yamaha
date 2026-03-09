@@ -61,6 +61,7 @@ CURSOR_TYPE_MAP = {
     CURSOR_TYPE_UP: rxv.RXV.menu_up.__name__,
 }
 DEFAULT_NAME = "Yamaha Receiver"
+MIN_VOLUME_DB = -80.0
 
 SUPPORT_YAMAHA = (
     MediaPlayerEntityFeature.VOLUME_SET
@@ -412,7 +413,7 @@ class YamahaDeviceZone(MediaPlayerEntity):
     def set_volume_level(self, volume: float) -> None:
         """Set volume level, range 0..1."""
         zone_vol = 100 - (volume * 100)
-        negative_zone_vol = -zone_vol
+        negative_zone_vol = max(-zone_vol, MIN_VOLUME_DB)
         self.zctrl.volume = negative_zone_vol
 
     def mute_volume(self, mute: bool) -> None:
