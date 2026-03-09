@@ -1,0 +1,3 @@
+[submodule "rxv"]
+	path = rxv
+	url = https://github.com/wuub/rxv
